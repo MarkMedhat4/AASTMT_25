@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StudyTracker 🎓</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+    <style>
+      :root{--pg:#0A0E1A;--cb:#0D1221;--ib:#14192B;--th:#101628;--b1:#1E2338;--b2:#2A2E3E;--t1:#E8EAF0;--t2:#C8D0E8;--t3:#8890B0;--t4:#6070A0;--t5:#4A5080;--t6:#3A4060;}
+      html.light{--pg:#F0F4FF;--cb:#FFFFFF;--ib:#EEF1FB;--th:#F5F7FF;--b1:#D4DCEF;--b2:#C0CCEC;--t1:#0F1220;--t2:#1E2640;--t3:#4A5480;--t4:#606888;--t5:#7880A0;--t6:#9098B8;}
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{background:var(--pg);color:var(--t1);font-family:'Space Grotesk',sans-serif;}
+      ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--pg)}::-webkit-scrollbar-thumb{background:var(--b2);border-radius:4px}
+      .hcard{transition:all .2s}.hcard:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,0.3)}
+      .lrow:hover{background:rgba(128,128,255,0.04)!important}
+      @keyframes fi{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+      @keyframes sp{to{transform:rotate(360deg)}}
+      .fi{animation:fi .3s ease}
+      .spin{animation:sp 1s linear infinite;display:inline-block;width:18px;height:18px;border:2px solid #ffffff40;border-top-color:#fff;border-radius:50%;vertical-align:middle;margin-right:8px}
+      .btn{cursor:pointer;border:none;border-radius:8px;padding:8px 16px;font-family:'Space Grotesk';font-size:13px;font-weight:600;transition:all .15s}
+      .btn:hover{filter:brightness(1.12);transform:scale(1.02)}.btn:active{transform:scale(0.98)}.btn:disabled{opacity:.45;cursor:not-allowed;transform:none!important}
+      input,select,textarea{font-family:'Space Grotesk';background:var(--ib);border:1px solid var(--b2);border-radius:8px;color:var(--t1);padding:10px 14px;font-size:14px;outline:none;transition:border .15s}
+      input:focus,select:focus,textarea:focus{border-color:#4F8EF7;box-shadow:0 0 0 3px #4F8EF715}
+      select option{background:var(--ib)}
+      .tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;font-family:'JetBrains Mono'}
+      .iopt{width:36px;height:36px;border-radius:8px;cursor:pointer;background:var(--ib);border:2px solid var(--b2);display:inline-flex;align-items:center;justify-content:center;font-size:15px;transition:all .15s;margin:2px}.iopt:hover{border-color:#4F8EF7}
+      .pinbox{width:52px;height:64px;font-size:24px;font-weight:700;text-align:center;background:var(--cb);border:2px solid var(--b2);border-radius:12px;color:var(--t1);font-family:'JetBrains Mono';outline:none;transition:all .15s;caret-color:transparent}
+      .pinbox:focus{border-color:#4F8EF7;box-shadow:0 0 0 3px #4F8EF720}.pinbox.filled{border-color:#4F8EF740;background:var(--ib)}
+      .bar-track{background:var(--b2);border-radius:99px;height:8px;overflow:hidden;flex:1}
+      .bar-fill{height:100%;border-radius:99px;transition:width .6s cubic-bezier(.4,0,.2,1)}
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
