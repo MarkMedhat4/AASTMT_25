@@ -328,12 +328,14 @@ function ScheduleSetup({courses,schedule,onSave,onBack}){
   const openAdd=()=>{setForm({id:Date.now(),courseId:courses[0]?.id||"",day:"Saturday",time:"",room:"",type:"Lect.",link:""});setModal(true);};
   const save=()=>{
     if(!form.courseId||!form.time)return;
-    setSlots(l=>{const ex=l.find(s=>s.id===form.id);return ex?l.map(s=>s.id===form.id?form:s):[...l,form];});
+    const c=courses.find(x=>String(x.id)===String(form.courseId))||{};
+    const enriched={...form,_cname:c.name||"",_ccolor:c.color||"#4A5080",_cicon:c.icon||"📚",_ccode:c.code||""};
+    setSlots(l=>{const ex=l.find(s=>s.id===form.id);return ex?l.map(s=>s.id===form.id?enriched:s):[...l,enriched];});
     setModal(false);setForm({});
   };
   const del=id=>setSlots(l=>l.filter(s=>s.id!==id));
   const edit=s=>{setForm({...s});setModal(true);};
-  const getCourse=id=>courses.find(c=>c.id===id)||{name:"Unknown",color:"#4A5080",icon:"?"};
+  const getCourse=id=>courses.find(c=>String(c.id)===String(id))||null;
   const byDay=DAYS.reduce((a,d)=>({...a,[d]:slots.filter(s=>s.day===d)}),[]);
   return(
     <div style={{minHeight:"100vh",background:"var(--pg)",padding:20}}>
@@ -354,7 +356,7 @@ function ScheduleSetup({courses,schedule,onSave,onBack}){
                 </div>
                 {daySlots.length>0&&(
                   <div style={{display:"flex",flexWrap:"wrap",gap:8,padding:"12px 18px"}}>
-                    {daySlots.map(s=>{const c=getCourse(s.courseId);return(
+                    {daySlots.map(s=>{const c=getCourse(s.courseId)||{name:s._cname||"Unknown",color:s._ccolor||"#4A5080",icon:s._cicon||"📚",code:s._ccode||""};return(
                       <div key={s.id} style={{background:c.color+"15",border:`1px solid ${c.color}40`,borderRadius:9,padding:"8px 12px",display:"flex",alignItems:"center",gap:10}}>
                         <span style={{fontSize:14}}>{c.icon}</span>
                         <div>
@@ -766,22 +768,22 @@ function App(){
     const empty={};sd(empty);setDat(empty);
   };
 
-  const gc=id=>courses.find(c=>c.id===id);
+  const gc=id=>courses.find(c=>String(c.id)===String(id));
   const gl=id=>(dat[id]||{lectures:[]}).lectures;
   const tl=id=>gl(id).length;
   const sc=id=>gl(id).filter(l=>l.studied).length;
   const ac=id=>gl(id).filter(l=>l.attended).length;
 
   const addL=()=>{
-    const{cid,lname,pdfData,pdfName,deadline}=form;
+    const{cid,lname,fileData,fileName,fileType,deadline}=form;
     const d={...dat};if(!d[cid])d[cid]={lectures:[]};
-    d[cid].lectures.push({id:Date.now(),name:lname||"Lecture "+(d[cid].lectures.length+1),pdfData:pdfData||null,pdfName:pdfName||null,studied:false,notes:"",attended:false,addedAt:new Date().toLocaleDateString(),deadline:deadline||null});
+    d[cid].lectures.push({id:Date.now(),name:lname||"Lecture "+(d[cid].lectures.length+1),fileData:fileData||null,fileName:fileName||null,fileType:fileType||null,studied:false,notes:"",attended:false,addedAt:new Date().toLocaleDateString(),deadline:deadline||null});
     sd(d);setModal(null);setForm({});
   };
   const tog=(cid,idx,f)=>{const d={...dat};d[cid].lectures[idx][f]=!d[cid].lectures[idx][f];sd(d);};
   const sn=()=>{const{cid,li,notes}=form;const d={...dat};d[cid].lectures[li].notes=notes;sd(d);setModal(null);setForm({});};
   const dl=(cid,idx)=>{const d={...dat};d[cid].lectures.splice(idx,1);sd(d);};
-  const hf=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>setForm(f=>({...f,pdfData:ev.target.result,pdfName:file.name}));r.readAsDataURL(file);};
+  const hf=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>setForm(f=>({...f,fileData:ev.target.result,fileName:file.name,fileType:file.type,lname:f.lname||(file.name.replace(/\.[^/.]+$/,""))}));r.readAsDataURL(file);};
 
   if(boot)return(
     <div style={{background:"var(--pg)",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -891,40 +893,66 @@ function App(){
                 </div>
               </>
             )}
-            {schedule.length>0&&(
+            {schedule.length>0&&(()=>{
+              // Collect all unique times sorted chronologically
+              const toMin=t=>{const p=(t||"").replace(/\s*(AM|PM)\s*/gi,"").split(/[–\-:]/);return parseInt(p[0]||0)*60+parseInt(p[1]||0);};
+              const allTimes=[...new Set(schedule.map(s=>s.time))].sort((a,b)=>toMin(a)-toMin(b));
+              return(
               <>
                 <h2 style={{fontFamily:"'Space Grotesk'",fontSize:18,fontWeight:700,marginBottom:16,color:"var(--t3)"}}>— Weekly Timetable</h2>
-                <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {DAYS.map(day=>{
-                    const daySlots=byDay[day]||[];
-                    return(
-                      <div key={day} style={{background:"var(--cb)",border:"1px solid var(--b1)",borderRadius:12,overflow:"hidden"}}>
-                        <div style={{padding:"11px 20px",background:"var(--th)",borderBottom:daySlots.length?"1px solid var(--b1)":"none",display:"flex",alignItems:"center",gap:12}}>
-                          <span style={{fontFamily:"'JetBrains Mono'",fontWeight:700,fontSize:12,color:"#4F8EF7",minWidth:90}}>{day}</span>
-                          {!daySlots.length&&<span style={{fontSize:12,color:"var(--t6)"}}>No classes</span>}
-                        </div>
-                        {daySlots.length>0&&(
-                          <div style={{display:"flex",flexWrap:"wrap",gap:10,padding:"14px 20px"}}>
-                            {daySlots.map((s,i)=>{const c=gc(s.courseId)||{name:s.courseId,color:"#4A5080",icon:"?"};return(
-                              <div key={i} style={{background:c.color+"12",border:`1px solid ${c.color}40`,borderRadius:10,padding:"10px 14px",minWidth:150,transition:"all .15s"}}>
-                                <div style={{fontFamily:"'JetBrains Mono'",fontSize:11,color:c.color,fontWeight:700}}>{s.time}</div>
-                                <div onClick={()=>setView(s.courseId)} style={{fontSize:12,fontWeight:600,color:"var(--t2)",margin:"3px 0 6px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer"}}>{c.name}</div>
-                                <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
-                                  <span className="tag" style={{background:(TC[s.type]||"#4A5080")+"20",color:TC[s.type]||"#4A5080"}}>{s.type}</span>
-                                  {s.room&&<span className="tag" style={{background:"#1A2040",color:"var(--t4)"}}>#{s.room}</span>}
-                                  {s.link&&<a href={s.link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
-                                    style={{fontSize:11,background:"#0E1E3A",color:"#4F8EF7",padding:"2px 8px",borderRadius:4,textDecoration:"none",fontWeight:700}}>🔗 Join</a>}
-                                </div>
-                              </div>
-                            );})}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                <div style={{overflowX:"auto",borderRadius:14,border:"1px solid var(--b1)",boxShadow:"0 4px 24px rgba(0,0,0,0.3)"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",minWidth:Math.max(600,allTimes.length*170+110),background:"var(--cb)"}}>
+                    <thead>
+                      <tr style={{background:"#1a6fa8"}}>
+                        <th style={{padding:"12px 18px",fontFamily:"'JetBrains Mono'",fontSize:12,fontWeight:700,color:"#fff",textAlign:"left",width:110,borderRight:"1px solid rgba(255,255,255,0.18)",whiteSpace:"nowrap"}}>Day</th>
+                        {allTimes.map(t=>(
+                          <th key={t} style={{padding:"12px 14px",fontFamily:"'JetBrains Mono'",fontSize:11,fontWeight:700,color:"#fff",textAlign:"center",borderRight:"1px solid rgba(255,255,255,0.18)",minWidth:160,whiteSpace:"nowrap"}}>
+                            {t}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {DAYS.filter(day=>(byDay[day]||[]).length>0||(byDay[day]||[]).length===0).map((day,di)=>{
+                        const daySlots=byDay[day]||[];
+                        return(
+                          <tr key={day} style={{borderTop:"1px solid var(--b1)",background:di%2===0?"var(--cb)":"var(--th)"}}>
+                            <td style={{padding:"12px 18px",fontFamily:"'JetBrains Mono'",fontSize:12,fontWeight:700,color:"#4F8EF7",borderRight:"1px solid var(--b1)",verticalAlign:"middle",whiteSpace:"nowrap"}}>{day}</td>
+                            {allTimes.map(t=>{
+                              const slot=daySlots.find(s=>s.time===t);
+                              if(!slot)return(
+                                <td key={t} style={{padding:"8px",borderRight:"1px solid var(--b1)",textAlign:"center",verticalAlign:"middle"}}>
+                                  <span style={{fontSize:13,color:"var(--b2)"}}>—</span>
+                                </td>
+                              );
+                              const c=gc(slot.courseId)||{name:slot._cname||"?",color:slot._ccolor||"#4A5080",icon:slot._cicon||"📚",code:slot._ccode||"",_cname:slot._cname||""};
+                              return(
+                                <td key={t} style={{padding:"7px",borderRight:"1px solid var(--b1)",verticalAlign:"top"}}>
+                                  <div onClick={()=>setView(slot.courseId)}
+                                    style={{background:c.color+"1A",border:`1px solid ${c.color}55`,borderTop:`3px solid ${c.color}`,borderRadius:8,padding:"10px 12px",cursor:"pointer",transition:"background .15s",minHeight:80}}
+                                    onMouseEnter={e=>e.currentTarget.style.background=c.color+"35"}
+                                    onMouseLeave={e=>e.currentTarget.style.background=c.color+"1A"}>
+                                    <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
+                                      <span style={{fontSize:14}}>{c.icon}</span>
+                                      <span className="tag" style={{background:(TC[slot.type]||"#4A5080")+"28",color:TC[slot.type]||"#4A5080",fontSize:9,padding:"2px 6px"}}>{slot.type}</span>
+                                    </div>
+                                    <div style={{fontFamily:"'JetBrains Mono'",fontSize:11,fontWeight:700,color:c.color,marginBottom:2}}>{c.code||c._ccode||"—"}</div>
+                                    <div style={{fontSize:11,fontWeight:600,color:"var(--t2)",lineHeight:1.35,marginBottom:5}}>{c.name||c._cname||"—"}</div>
+                                    {slot.room&&<div style={{fontSize:10,color:"var(--t4)"}}>📍 {slot.room}</div>}
+                                    {slot.link&&<a href={slot.link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{fontSize:10,color:"#4F8EF7",fontWeight:700,textDecoration:"none",display:"inline-block",marginTop:3}}>🔗 Join</a>}
+                                  </div>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </>
-            )}
+              );
+            })()}
           </div>
         )}
 
@@ -986,7 +1014,15 @@ function App(){
                       <div style={{fontSize:14,fontWeight:600,color:"var(--t2)",marginBottom:3}}>{lect.name}</div>
                       <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
                         <span style={{fontSize:11,color:"var(--t6)"}}>{lect.addedAt}</span>
-                        {lect.pdfName&&<a href={lect.pdfData} download={lect.pdfName} style={{fontSize:11,color:"#4F8EF7",textDecoration:"none",background:"#1A2A4A",padding:"2px 8px",borderRadius:4}}>📄 {lect.pdfName.slice(0,14)}{lect.pdfName.length>14?"…":""}</a>}
+                        {lect.fileName&&(lect.fileType&&lect.fileType.startsWith("image/")?
+                          <a href={lect.fileData} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:"#4FC28E",textDecoration:"none",background:"#0E2A1E",padding:"2px 8px",borderRadius:4,display:"inline-flex",alignItems:"center",gap:4}}>
+                            <img src={lect.fileData} alt="" style={{width:16,height:16,objectFit:"cover",borderRadius:2,flexShrink:0}}/>
+                            {lect.fileName.slice(0,14)}{lect.fileName.length>14?"…":""}
+                          </a>
+                          :<a href={lect.fileData} download={lect.fileName} style={{fontSize:11,color:"#4F8EF7",textDecoration:"none",background:"#1A2A4A",padding:"2px 8px",borderRadius:4}}>📄 {lect.fileName.slice(0,14)}{lect.fileName.length>14?"…":""}</a>
+                        )}
+                        {/* legacy pdfName support */}
+                        {!lect.fileName&&lect.pdfName&&<a href={lect.pdfData} download={lect.pdfName} style={{fontSize:11,color:"#4F8EF7",textDecoration:"none",background:"#1A2A4A",padding:"2px 8px",borderRadius:4}}>📄 {lect.pdfName.slice(0,14)}{lect.pdfName.length>14?"…":""}</a>}
                         {lect.notes&&<span style={{fontSize:11,color:"#B44FF7",background:"#2A1A4A",padding:"2px 8px",borderRadius:4}}>📝</span>}
                         {(()=>{const di=dlInfo(lect.deadline);return di?<span style={{fontSize:11,color:di.color,background:di.bg,padding:"2px 8px",borderRadius:4,border:"1px solid "+di.color+"40"}}>{di.icon} {di.label}</span>:null;})()}
                       </div>
@@ -1061,9 +1097,17 @@ function App(){
                 <div style={{display:"flex",flexDirection:"column",gap:14}}>
                   <div><label style={{fontSize:11,color:"var(--t4)",fontFamily:"'JetBrains Mono'",display:"block",marginBottom:6}}>LECTURE NAME</label>
                     <input value={form.lname||""} onChange={e=>setForm(f=>({...f,lname:e.target.value}))} placeholder="e.g. Fourier Transform" style={{width:"100%"}} onKeyDown={e=>e.key==="Enter"&&addL()}/></div>
-                  <div><label style={{fontSize:11,color:"var(--t4)",fontFamily:"'JetBrains Mono'",display:"block",marginBottom:6}}>ATTACH PDF (optional)</label>
-                    <input ref={fRef} type="file" accept=".pdf" onChange={hf} style={{display:"none"}}/>
-                    <button className="btn" onClick={()=>fRef.current.click()} style={{background:"var(--ib)",color:"var(--t3)",border:"1px solid var(--b2)",width:"100%",padding:"10px"}}>{form.pdfName?"📄 "+form.pdfName:"📎 Choose PDF"}</button></div>
+                  <div><label style={{fontSize:11,color:"var(--t4)",fontFamily:"'JetBrains Mono'",display:"block",marginBottom:6}}>📎 ATTACH FILE — PDF or Image (optional)</label>
+                    <input ref={fRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,image/*" onChange={hf} style={{display:"none"}}/>
+                    <button className="btn" onClick={()=>fRef.current.click()} style={{background:"var(--ib)",color:"var(--t3)",border:"1px solid var(--b2)",width:"100%",padding:"10px"}}>
+                      {form.fileName?(form.fileType&&form.fileType.startsWith("image/")?"🖼 ":"📄 ")+form.fileName:"📎 Choose PDF or Image"}
+                    </button>
+                    {form.fileData&&form.fileType&&form.fileType.startsWith("image/")&&(
+                      <div style={{marginTop:8,borderRadius:8,overflow:"hidden",border:"1px solid var(--b2)",maxHeight:180,display:"flex",alignItems:"center",justifyContent:"center",background:"var(--pg)"}}>
+                        <img src={form.fileData} alt="preview" style={{maxHeight:180,maxWidth:"100%",objectFit:"contain"}}/>
+                      </div>
+                    )}
+                  </div>
                   <div><label style={{fontSize:11,color:"var(--t4)",fontFamily:"'JetBrains Mono'",display:"block",marginBottom:6}}>📅 DEADLINE (optional)</label>
                     <input type="date" value={form.deadline||""} onChange={e=>setForm(f=>({...f,deadline:e.target.value}))} style={{width:"100%",colorScheme:theme==="dark"?"dark":"light"}}/></div>
                   <div style={{display:"flex",gap:10,paddingTop:6}}>
