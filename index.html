@@ -433,21 +433,62 @@ function ScheduleSetup({courses,schedule,onSave,onBack}){
 // ════════════════════════════════════════════════════════════
 // SETTINGS DRAWER
 // ════════════════════════════════════════════════════════════
-function SettingsDrawer({user,dat,courses,schedule,theme,toggleTheme,settings,setSettings,onClose,onResetAll,onManageCourses}){
+function SettingsDrawer({user,dat,courses,schedule,theme,toggleTheme,settings,setSettings,onClose,onResetAll,onManageCourses,onUserUpdate}){
   const [confirmReset,setConfirmReset]=useState(false);
   const [notifStatus,setNotifStatus]=useState(Notification?.permission||"default");
   const importRef=useRef();
+  const photoRef=useRef();
+
+  // ── Account state ──
+  const photoKey=`st_photo_${user.username}`;
+  const [photo,setPhoto]=useState(()=>store.get(photoKey)||null);
+  const [editName,setEditName]=useState(false);
+  const [newName,setNewName]=useState(user.name||user.username);
+  const [nameErr,setNameErr]=useState("");
+  const [editPin,setEditPin]=useState(false);
+  const [oldPin,setOldPin]=useState("");
+  const [newPin,setNewPin]=useState("");
+  const [pinErr,setPinErr]=useState("");
+  const [pinOk,setPinOk]=useState(false);
+
+  const saveName=()=>{
+    const n=newName.trim();
+    if(!n){setNameErr("Name can't be empty.");return;}
+    const users=getUsers();
+    users[user.username].name=n;
+    saveUsers(users);
+    store.set(SESSION_KEY,{...user,name:n});
+    if(onUserUpdate)onUserUpdate({...user,name:n});
+    setEditName(false);setNameErr("");
+  };
+
+  const savePin=()=>{
+    const users=getUsers();
+    if(users[user.username].pin!==oldPin){setPinErr("Current PIN is wrong.");return;}
+    if(newPin.length!==4){setPinErr("New PIN must be 4 digits.");return;}
+    users[user.username].pin=newPin;
+    saveUsers(users);
+    setPinOk(true);setPinErr("");
+    setTimeout(()=>{setEditPin(false);setPinOk(false);setOldPin("");setNewPin("");},1500);
+  };
+
+  const handlePhoto=e=>{
+    const file=e.target.files[0];if(!file)return;
+    const r=new FileReader();
+    r.onload=ev=>{
+      const data=ev.target.result;
+      store.set(photoKey,data);
+      setPhoto(data);
+      if(onUserUpdate)onUserUpdate({...user,photo:data});
+    };
+    r.readAsDataURL(file);
+    e.target.value="";
+  };
+
+  const removePhoto=()=>{store.del(photoKey);setPhoto(null);if(onUserUpdate)onUserUpdate({...user,photo:null});};
 
   const exportBackup=()=>{
-    const backup={
-      version:1,
-      exportedAt:new Date().toISOString(),
-      username:user.username,
-      courses:courses,
-      schedule:schedule,
-      data:dat,
-      settings:settings,
-    };
+    const backup={version:1,exportedAt:new Date().toISOString(),username:user.username,courses,schedule,data:dat,settings};
     const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"});
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
@@ -469,15 +510,14 @@ function SettingsDrawer({user,dat,courses,schedule,theme,toggleTheme,settings,se
         setTimeout(()=>window.location.reload(),500);
       }catch{alert("Failed to parse backup file.");}
     };
-    r.readAsText(file);
-    e.target.value="";
+    r.readAsText(file);e.target.value="";
   };
 
   const requestNotifs=async()=>{
     if(!("Notification" in window)){alert("Notifications not supported in your browser.");return;}
     const p=await Notification.requestPermission();
     setNotifStatus(p);
-    if(p==="granted") new Notification("StudyTracker 🎓",{body:"Notifications enabled! You'll be reminded before classes.",icon:"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>"});
+    if(p==="granted") new Notification("StudyTracker 🎓",{body:"Notifications enabled!"});
   };
 
   const Row=({label,desc,children})=>(
@@ -505,8 +545,74 @@ function SettingsDrawer({user,dat,courses,schedule,theme,toggleTheme,settings,se
           <button className="btn" onClick={onClose} style={{background:"var(--ib)",color:"var(--t3)",border:"1px solid var(--b2)",padding:"5px 10px",fontSize:16}}>✕</button>
         </div>
 
-        {/* Display */}
-        <div style={{fontSize:11,color:"#4F8EF7",fontFamily:"'JetBrains Mono'",letterSpacing:2,marginBottom:4}}>DISPLAY</div>
+        {/* ── ACCOUNT ── */}
+        <div style={{fontSize:11,color:"#B44FF7",fontFamily:"'JetBrains Mono'",letterSpacing:2,marginBottom:12}}>ACCOUNT</div>
+
+        {/* Profile card */}
+        <div style={{background:"var(--ib)",border:"1px solid var(--b2)",borderRadius:14,padding:"16px",marginBottom:16,display:"flex",alignItems:"center",gap:14}}>
+          {/* Avatar */}
+          <div style={{position:"relative",flexShrink:0}}>
+            <div style={{width:62,height:62,borderRadius:"50%",background:"linear-gradient(135deg,#4F8EF7,#B44FF7)",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"2px solid var(--b2)"}}>
+              {photo
+                ?<img src={photo} alt="avatar" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                :<span style={{fontSize:26,fontWeight:700,color:"#fff"}}>{(user.name||user.username)[0].toUpperCase()}</span>}
+            </div>
+            <button onClick={()=>photoRef.current.click()} style={{position:"absolute",bottom:0,right:0,width:22,height:22,background:"#4F8EF7",border:"2px solid var(--cb)",borderRadius:"50%",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11}}>📷</button>
+            <input ref={photoRef} type="file" accept="image/*" onChange={handlePhoto} style={{display:"none"}}/>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:15,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name||user.username}</div>
+            <div style={{fontFamily:"'JetBrains Mono'",fontSize:11,color:"var(--t5)",marginTop:2}}>@{user.username}</div>
+            {photo&&<button onClick={removePhoto} style={{marginTop:5,fontSize:11,color:"#F74F4F",background:"none",border:"none",cursor:"pointer",padding:0,fontFamily:"'Space Grotesk'"}}>Remove photo</button>}
+          </div>
+        </div>
+
+        {/* Change Name */}
+        <div style={{padding:"14px 0",borderBottom:"1px solid var(--b1)"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:editName?12:0}}>
+            <div>
+              <div style={{fontSize:14,fontWeight:600}}>Display Name</div>
+              {!editName&&<div style={{fontSize:12,color:"var(--t5)",marginTop:2}}>{user.name||user.username}</div>}
+            </div>
+            {!editName&&<button className="btn" onClick={()=>{setEditName(true);setNewName(user.name||user.username);setNameErr("");}} style={{background:"#1E2A4A",color:"#4F8EF7",border:"1px solid #2E4070",padding:"6px 14px",fontSize:13}}>Edit</button>}
+          </div>
+          {editName&&(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Your name" style={{width:"100%"}} onKeyDown={e=>e.key==="Enter"&&saveName()}/>
+              {nameErr&&<div style={{fontSize:12,color:"#F74F4F"}}>{nameErr}</div>}
+              <div style={{display:"flex",gap:8}}>
+                <button className="btn" onClick={()=>setEditName(false)} style={{background:"var(--ib)",color:"var(--t4)",border:"1px solid var(--b2)",flex:1}}>Cancel</button>
+                <button className="btn" onClick={saveName} style={{background:"#B44FF7",color:"#fff",flex:2}}>Save Name</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Change PIN */}
+        <div style={{padding:"14px 0",borderBottom:"1px solid var(--b1)"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:editPin?12:0}}>
+            <div>
+              <div style={{fontSize:14,fontWeight:600}}>Change PIN</div>
+              {!editPin&&<div style={{fontSize:12,color:"var(--t5)",marginTop:2}}>••••</div>}
+            </div>
+            {!editPin&&<button className="btn" onClick={()=>{setEditPin(true);setOldPin("");setNewPin("");setPinErr("");setPinOk(false);}} style={{background:"#1E2A4A",color:"#4F8EF7",border:"1px solid #2E4070",padding:"6px 14px",fontSize:13}}>Change</button>}
+          </div>
+          {editPin&&(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <input type="password" inputMode="numeric" maxLength={4} value={oldPin} onChange={e=>setOldPin(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="Current PIN (4 digits)" style={{width:"100%",letterSpacing:6,fontFamily:"'JetBrains Mono'",fontSize:18,textAlign:"center"}}/>
+              <input type="password" inputMode="numeric" maxLength={4} value={newPin} onChange={e=>setNewPin(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="New PIN (4 digits)" style={{width:"100%",letterSpacing:6,fontFamily:"'JetBrains Mono'",fontSize:18,textAlign:"center"}}/>
+              {pinErr&&<div style={{fontSize:12,color:"#F74F4F"}}>{pinErr}</div>}
+              {pinOk&&<div style={{fontSize:12,color:"#4FC28E",fontWeight:600}}>✅ PIN changed successfully!</div>}
+              <div style={{display:"flex",gap:8}}>
+                <button className="btn" onClick={()=>setEditPin(false)} style={{background:"var(--ib)",color:"var(--t4)",border:"1px solid var(--b2)",flex:1}}>Cancel</button>
+                <button className="btn" onClick={savePin} disabled={oldPin.length!==4||newPin.length!==4} style={{background:"#B44FF7",color:"#fff",flex:2}}>Save PIN</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── DISPLAY ── */}
+        <div style={{fontSize:11,color:"#4F8EF7",fontFamily:"'JetBrains Mono'",letterSpacing:2,marginBottom:4,marginTop:20}}>DISPLAY</div>
         <Row label="Dark / Light Mode" desc={theme==="dark"?"Currently: Dark mode":"Currently: Light mode"}>
           <button className="btn" onClick={toggleTheme} style={{background:"var(--ib)",color:"var(--t3)",border:"1px solid var(--b2)",fontSize:18,padding:"4px 10px"}}>{theme==="dark"?"☀️":"🌙"}</button>
         </Row>
@@ -775,15 +881,35 @@ function App(){
   const ac=id=>gl(id).filter(l=>l.attended).length;
 
   const addL=()=>{
-    const{cid,lname,fileData,fileName,fileType,deadline}=form;
+    const{cid,files,deadline}=form;
+    if(!cid)return;
     const d={...dat};if(!d[cid])d[cid]={lectures:[]};
-    d[cid].lectures.push({id:Date.now(),name:lname||"Lecture "+(d[cid].lectures.length+1),fileData:fileData||null,fileName:fileName||null,fileType:fileType||null,studied:false,notes:"",attended:false,addedAt:new Date().toLocaleDateString(),deadline:deadline||null});
+    const items=files&&files.length?files:[{lname:"",fileData:null,fileName:null,fileType:null}];
+    items.forEach((f,i)=>{
+      d[cid].lectures.push({id:Date.now()+i,name:(f.lname||"").trim()||"Lecture "+(d[cid].lectures.length+1),fileData:f.fileData||null,fileName:f.fileName||null,fileType:f.fileType||null,studied:false,notes:"",attended:false,addedAt:new Date().toLocaleDateString(),deadline:deadline||null});
+    });
     sd(d);setModal(null);setForm({});
   };
   const tog=(cid,idx,f)=>{const d={...dat};d[cid].lectures[idx][f]=!d[cid].lectures[idx][f];sd(d);};
   const sn=()=>{const{cid,li,notes}=form;const d={...dat};d[cid].lectures[li].notes=notes;sd(d);setModal(null);setForm({});};
   const dl=(cid,idx)=>{const d={...dat};d[cid].lectures.splice(idx,1);sd(d);};
-  const hf=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>setForm(f=>({...f,fileData:ev.target.result,fileName:file.name,fileType:file.type,lname:f.lname||(file.name.replace(/\.[^/.]+$/,""))}));r.readAsDataURL(file);};
+  const hf=e=>{
+    const rawFiles=Array.from(e.target.files);
+    if(!rawFiles.length)return;
+    let loaded=0;const newEntries=[];
+    rawFiles.forEach(file=>{
+      const r=new FileReader();
+      r.onload=ev=>{
+        newEntries.push({fileData:ev.target.result,fileName:file.name,fileType:file.type,lname:file.name.replace(/\.[^/.]+$/, "")});
+        loaded++;
+        if(loaded===rawFiles.length)setForm(f=>({...f,files:[...(f.files||[]),...newEntries]}));
+      };
+      r.readAsDataURL(file);
+    });
+    e.target.value="";
+  };
+  const removeFile=idx=>setForm(f=>({...f,files:(f.files||[]).filter((_,i)=>i!==idx)}));
+  const renameFile=(idx,val)=>setForm(f=>({...f,files:(f.files||[]).map((x,i)=>i===idx?{...x,lname:val}:x)}));
 
   if(boot)return(
     <div style={{background:"var(--pg)",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -827,8 +953,12 @@ function App(){
           </div>
         )}
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:7,background:"var(--ib)",border:"1px solid var(--b2)",borderRadius:20,padding:"5px 13px"}}>
-            <div style={{width:22,height:22,background:"linear-gradient(135deg,#4F8EF7,#B44FF7)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff"}}>{uname[0].toUpperCase()}</div>
+          <div style={{display:"flex",alignItems:"center",gap:7,background:"var(--ib)",border:"1px solid var(--b2)",borderRadius:20,padding:"5px 13px",cursor:"pointer"}} onClick={()=>setShowSettings(true)}>
+            <div style={{width:22,height:22,background:"linear-gradient(135deg,#4F8EF7,#B44FF7)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",overflow:"hidden",flexShrink:0}}>
+              {user.photo||store.get(`st_photo_${user.username}`)
+                ?<img src={user.photo||store.get(`st_photo_${user.username}`)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                :uname[0].toUpperCase()}
+            </div>
             <span style={{fontSize:12,color:"var(--t3)",fontWeight:600,maxWidth:90,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{uname}</span>
           </div>
           <button className="btn" onClick={()=>setView("schedule")} style={{background:view==="schedule"?"#1E2A4A":"transparent",color:view==="schedule"?"#4F8EF7":"var(--t4)",border:"1px solid "+(view==="schedule"?"#2E4070":"transparent"),padding:"6px 10px",fontSize:13}}>📅</button>
@@ -1083,6 +1213,7 @@ function App(){
           onClose={()=>setShowSettings(false)}
           onResetAll={()=>{resetAll();setShowSettings(false);}}
           onManageCourses={()=>{setSetup("courses");setShowSettings(false);}}
+          onUserUpdate={u=>setUser(u)}
         />
       )}
 
@@ -1092,28 +1223,57 @@ function App(){
           <div onClick={e=>e.stopPropagation()} className="fi" style={{background:"var(--cb)",border:"1px solid var(--b2)",borderRadius:18,padding:"28px",maxWidth:480,width:"100%",boxShadow:"0 30px 80px rgba(0,0,0,0.7)",maxHeight:"90vh",overflowY:"auto"}}>
             {modal==="add"&&(
               <>
-                <h3 style={{fontFamily:"'Space Grotesk'",fontSize:20,fontWeight:700,marginBottom:6}}>+ Add Lecture</h3>
-                <p style={{fontSize:13,color:"var(--t5)",marginBottom:22}}>{gc(form.cid)?.name}</p>
-                <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                  <div><label style={{fontSize:11,color:"var(--t4)",fontFamily:"'JetBrains Mono'",display:"block",marginBottom:6}}>LECTURE NAME</label>
-                    <input value={form.lname||""} onChange={e=>setForm(f=>({...f,lname:e.target.value}))} placeholder="e.g. Fourier Transform" style={{width:"100%"}} onKeyDown={e=>e.key==="Enter"&&addL()}/></div>
-                  <div><label style={{fontSize:11,color:"var(--t4)",fontFamily:"'JetBrains Mono'",display:"block",marginBottom:6}}>📎 ATTACH FILE — PDF or Image (optional)</label>
-                    <input ref={fRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,image/*" onChange={hf} style={{display:"none"}}/>
-                    <button className="btn" onClick={()=>fRef.current.click()} style={{background:"var(--ib)",color:"var(--t3)",border:"1px solid var(--b2)",width:"100%",padding:"10px"}}>
-                      {form.fileName?(form.fileType&&form.fileType.startsWith("image/")?"🖼 ":"📄 ")+form.fileName:"📎 Choose PDF or Image"}
-                    </button>
-                    {form.fileData&&form.fileType&&form.fileType.startsWith("image/")&&(
-                      <div style={{marginTop:8,borderRadius:8,overflow:"hidden",border:"1px solid var(--b2)",maxHeight:180,display:"flex",alignItems:"center",justifyContent:"center",background:"var(--pg)"}}>
-                        <img src={form.fileData} alt="preview" style={{maxHeight:180,maxWidth:"100%",objectFit:"contain"}}/>
+                <h3 style={{fontFamily:"'Space Grotesk'",fontSize:20,fontWeight:700,marginBottom:4}}>+ Add Lectures</h3>
+                <p style={{fontSize:13,color:"var(--t5)",marginBottom:20}}>{gc(form.cid)?.name} — {(form.files||[]).length||0} file{(form.files||[]).length!==1?"s":""} selected</p>
+
+                {/* Drop / pick zone */}
+                <div
+                  onClick={()=>fRef.current.click()}
+                  onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor="#4F8EF7";e.currentTarget.style.background="#4F8EF710";}}
+                  onDragLeave={e=>{e.currentTarget.style.borderColor="var(--b2)";e.currentTarget.style.background="var(--ib)";}}
+                  onDrop={e=>{e.preventDefault();e.currentTarget.style.borderColor="var(--b2)";e.currentTarget.style.background="var(--ib)";const dt=e.dataTransfer;if(dt.files.length){const fakeEv={target:{files:dt.files,value:""},preventDefault:()=>{}};hf(fakeEv);}}}
+                  style={{border:"2px dashed var(--b2)",borderRadius:12,padding:"20px",textAlign:"center",cursor:"pointer",background:"var(--ib)",transition:"all .2s",marginBottom:14}}>
+                  <div style={{fontSize:28,marginBottom:6}}>📁</div>
+                  <div style={{fontSize:14,fontWeight:600,color:"var(--t2)",marginBottom:3}}>Click or drag & drop files here</div>
+                  <div style={{fontSize:12,color:"var(--t5)"}}>PDF, PNG, JPG, WEBP — select multiple at once</div>
+                  <input ref={fRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,image/*" multiple onChange={hf} style={{display:"none"}}/>
+                </div>
+
+                {/* File list */}
+                {(form.files||[]).length>0&&(
+                  <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14,maxHeight:260,overflowY:"auto"}}>
+                    {(form.files||[]).map((f,i)=>(
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:10,background:"var(--ib)",border:"1px solid var(--b2)",borderRadius:10,padding:"8px 12px"}}>
+                        {/* Thumb / icon */}
+                        <div style={{width:36,height:36,borderRadius:6,overflow:"hidden",flexShrink:0,background:"var(--b1)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                          {f.fileType&&f.fileType.startsWith("image/")
+                            ?<img src={f.fileData} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                            :<span style={{fontSize:18}}>📄</span>}
+                        </div>
+                        {/* Name input */}
+                        <input
+                          value={f.lname||""}
+                          onChange={e=>renameFile(i,e.target.value)}
+                          placeholder={`Lecture ${i+1} name`}
+                          style={{flex:1,padding:"6px 10px",fontSize:13,borderRadius:7,minWidth:0}}/>
+                        {/* Remove */}
+                        <button onClick={()=>removeFile(i)} style={{background:"#2A1018",border:"1px solid #4A1520",color:"#F74F4F",borderRadius:6,cursor:"pointer",padding:"4px 9px",fontSize:13,flexShrink:0}}>✕</button>
                       </div>
-                    )}
+                    ))}
                   </div>
-                  <div><label style={{fontSize:11,color:"var(--t4)",fontFamily:"'JetBrains Mono'",display:"block",marginBottom:6}}>📅 DEADLINE (optional)</label>
-                    <input type="date" value={form.deadline||""} onChange={e=>setForm(f=>({...f,deadline:e.target.value}))} style={{width:"100%",colorScheme:theme==="dark"?"dark":"light"}}/></div>
-                  <div style={{display:"flex",gap:10,paddingTop:6}}>
-                    <button className="btn" onClick={()=>{setModal(null);setForm({});}} style={{background:"var(--ib)",color:"var(--t4)",border:"1px solid var(--b2)",flex:1}}>Cancel</button>
-                    <button className="btn" onClick={addL} style={{background:gc(form.cid)?.color||"#4F8EF7",color:"#fff",flex:2}}>Add Lecture</button>
-                  </div>
+                )}
+
+                {/* Deadline (shared for all) */}
+                <div style={{marginBottom:16}}>
+                  <label style={{fontSize:11,color:"var(--t4)",fontFamily:"'JetBrains Mono'",display:"block",marginBottom:6}}>📅 DEADLINE — applied to all (optional)</label>
+                  <input type="date" value={form.deadline||""} onChange={e=>setForm(f=>({...f,deadline:e.target.value}))} style={{width:"100%",colorScheme:theme==="dark"?"dark":"light"}}/>
+                </div>
+
+                <div style={{display:"flex",gap:10}}>
+                  <button className="btn" onClick={()=>{setModal(null);setForm({});}} style={{background:"var(--ib)",color:"var(--t4)",border:"1px solid var(--b2)",flex:1}}>Cancel</button>
+                  <button className="btn" onClick={addL} disabled={!(form.files||[]).length} style={{background:gc(form.cid)?.color||"#4F8EF7",color:"#fff",flex:2,opacity:(form.files||[]).length?1:0.4}}>
+                    Add {(form.files||[]).length>1?`${(form.files||[]).length} Lectures`:"Lecture"}
+                  </button>
                 </div>
               </>
             )}
